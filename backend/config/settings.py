@@ -68,6 +68,9 @@ DATABASES = {
 
 # REST Framework
 REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend'
+    ],
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -100,8 +103,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://10.0.24.23:5174',
     'http://10.0.28.44:5173',
     'http://10.0.28.44:5174',
-    'http://192.168.242.1:5173',
-    'http://192.168.233.1:5173',
+    'http://192.168.1.7:5173',
 ]
 
 # API Docs
