@@ -32,19 +32,19 @@ class ClientAdmin(admin.ModelAdmin):
 @admin.register(Vente)
 class VenteAdmin(admin.ModelAdmin):
     list_display = ['numero', 'client', 'date_vente', 'statut', 'montant_ttc', 'utilisateur']
-    list_filter = ['statut', 'date_vente', 'taux_tva']
+    list_filter = ['statut', 'date_vente', 'type_remise']
     search_fields = ['numero', 'client__nom']
-    readonly_fields = ['numero', 'montant_total', 'montant_ht', 'montant_tva', 'montant_ttc', 'created_at', 'updated_at']
+    readonly_fields = ['numero', 'montant_total', 'montant_ht', 'montant_ttc', 'created_at', 'updated_at']
     inlines = [VenteItemInline]
     fieldsets = (
         ('Informations', {
             'fields': ('numero', 'client', 'date_vente', 'utilisateur', 'statut')
         }),
         ('Détails commerciaux', {
-            'fields': ('taux_tva', 'montant_remise')
+            'fields': ('type_remise',)
         }),
         ('Calculs', {
-            'fields': ('montant_ht', 'montant_tva', 'montant_ttc', 'montant_total'),
+            'fields': ('montant_ht', 'montant_ttc', 'montant_total'),
             'classes': ('collapse',)
         }),
         ('Notes', {

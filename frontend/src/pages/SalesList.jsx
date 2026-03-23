@@ -235,7 +235,7 @@ export function SalesList() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-bold text-green-600 text-sm">
-                      {parseFloat(sale.montant_ttc || 0).toFixed(2)} DA
+                      {parseFloat(sale.montant_ttc || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${sale.est_paye ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
@@ -317,7 +317,7 @@ export function SalesList() {
                   </div>
                   <div className="bg-green-50 p-2 rounded">
                     <div className="text-xs text-gray-500">Montant</div>
-                    <div className="font-semibold text-green-700">{parseFloat(sale.montant_ttc || 0).toFixed(2)} DA</div>
+                    <div className="font-semibold text-green-700">{parseFloat(sale.montant_ttc || 0).toFixed(2)}</div>
                   </div>
                 </div>
 

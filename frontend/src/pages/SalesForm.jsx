@@ -10,8 +10,7 @@ export function SalesForm() {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     client: '',
-    montant_remise: 0,
-    taux_tva: 20,
+    type_remise: 'détails',
     est_paye: false,
     statut: 'brouillon',
     items: [],
@@ -55,8 +54,7 @@ export function SalesForm() {
       const sale = await venteService.getById(saleId);
       setFormData({
         client: sale.client.id,
-        montant_remise: sale.montant_remise,
-        taux_tva: sale.taux_tva,
+        type_remise: sale.type_remise,
         est_paye: sale.est_paye,
         statut: sale.statut,
         items: sale.items.map(item => ({
@@ -150,8 +148,7 @@ export function SalesForm() {
       setError(null);
       const data = {
         client: formData.client,
-        montant_remise: parseFloat(formData.montant_remise),
-        taux_tva: parseFloat(formData.taux_tva),
+        type_remise: formData.type_remise,
         est_paye: formData.est_paye,
         statut: formData.statut,
         items: formData.items.map(item => ({
@@ -177,9 +174,23 @@ export function SalesForm() {
     }
   };
 
-  const montantHT = formData.items.reduce((sum, item) => sum + item.montant_total, 0) - parseFloat(formData.montant_remise);
-  const montantTVA = montantHT * (parseFloat(formData.taux_tva) / 100);
-  const montantTTC = montantHT + montantTVA;
+  const handleRemoveItem = (index) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index),
+    });
+  };
+
+  const remiseRateMap = {
+    'gros': 0.30,
+    'semi-gros': 0.10,
+    'détails': 0.00,
+  };
+  const montantBrut = formData.items.reduce((sum, item) => sum + item.montant_total, 0);
+  const tauxRemise = remiseRateMap[formData.type_remise] || 0;
+  const montantRemise = montantBrut * tauxRemise;
+  const montantHT = montantBrut - montantRemise;
+  const montantTTC = montantHT;
 
   if (loading) return <div className="w-full min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
 
@@ -274,14 +285,16 @@ export function SalesForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Taux TVA (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.taux_tva}
-                  onChange={(e) => setFormData({ ...formData, taux_tva: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Type de remise</label>
+                <select
+                  value={formData.type_remise}
+                  onChange={(e) => setFormData({ ...formData, type_remise: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                />
+                >
+                  <option value="gros">Gros (-30%)</option>
+                  <option value="semi-gros">Semi-gros (-10%)</option>
+                  <option value="détails">Détails (0%)</option>
+                </select>
               </div>
 
               <div className="flex items-end">
@@ -441,21 +454,15 @@ export function SalesForm() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-700">Montant HT:</span>
+                <span className="font-semibold text-lg text-gray-900">{montantBrut.toFixed(2)} DA</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700">Remise ({(tauxRemise * 100).toFixed(0)}%):</span>
+                <span className="font-semibold text-lg text-red-600">-{montantRemise.toFixed(2)} DA</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700">Montant HT après remise:</span>
                 <span className="font-semibold text-lg text-gray-900">{montantHT.toFixed(2)} DA</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Remise:</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.montant_remise}
-                  onChange={(e) => setFormData({ ...formData, montant_remise: e.target.value })}
-                  className="w-32 px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">TVA ({formData.taux_tva}%):</span>
-                <span className="font-semibold text-lg text-gray-900">{montantTVA.toFixed(2)} DA</span>
               </div>
               <div className="border-t-2 border-blue-200 pt-3 flex justify-between items-center">
                 <span className="text-lg font-bold text-gray-900">Montant TTC:</span>
@@ -541,11 +548,11 @@ export function SalesForm() {
         </div>
 
         <div className="sales-order-totals">
-          <div><span>Montant HT:</span> <span>{montantHT.toFixed(2)} DA</span></div>
-          {parseFloat(formData.montant_remise) > 0 && (
-            <div><span>Remise:</span> <span>-{parseFloat(formData.montant_remise).toFixed(2)} DA</span></div>
+          <div><span>Montant HT:</span> <span>{montantBrut.toFixed(2)} DA</span></div>
+          {montantRemise > 0 && (
+            <div><span>Remise ({(tauxRemise * 100).toFixed(0)}%):</span> <span>-{montantRemise.toFixed(2)} DA</span></div>
           )}
-          <div><span>TVA ({formData.taux_tva}%):</span> <span>{montantTVA.toFixed(2)} DA</span></div>
+          <div><span>Montant HT après remise:</span> <span>{montantHT.toFixed(2)} DA</span></div>
           <div className="total"><span>Montant TTC:</span> <span>{montantTTC.toFixed(2)} DA</span></div>
         </div>
 

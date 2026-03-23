@@ -3,6 +3,7 @@ from django.core.validators import MinValueValidator
 from products.models import Produit
 from django.contrib.auth import get_user_model
 from datetime import datetime
+from decimal import Decimal
 
 
 User = get_user_model()
@@ -43,17 +44,21 @@ class Vente(models.Model):
         ('annulée', 'Annulée'),
     ]
     
+    REMISE_TYPES = [
+        ('gros', 'Gros (-30%)'),
+        ('semi-gros', 'Semi-gros (-10%)'),
+        ('détails', 'Détails (0%)'),
+    ]
+    
     numero = models.CharField(max_length=50, unique=True, blank=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='ventes')
     date_vente = models.DateField(auto_now_add=True)
     statut = models.CharField(max_length=20, choices=STATUTS, default='brouillon')
     est_paye = models.BooleanField(default=False, verbose_name="Payé")
     montant_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    montant_remise = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    type_remise = models.CharField(max_length=20, choices=REMISE_TYPES, default='détails')
     montant_ht = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    montant_tva = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_ttc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    taux_tva = models.DecimalField(max_digits=5, decimal_places=2, default=20)
     utilisateur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -95,11 +100,23 @@ class Vente(models.Model):
     def calculer_totaux(self):
         """Recalcule les montants totaux"""
         items = self.items.all()
-        self.montant_ht = sum(item.montant_total for item in items) - self.montant_remise
-        self.montant_tva = self.montant_ht * (self.taux_tva / 100)
-        self.montant_ttc = self.montant_ht + self.montant_tva
+        montant_brut = sum(item.montant_total for item in items)
+        
+        # Calculer la remise en fonction du type
+        taux_remise_map = {
+            'gros': 0.30,
+            'semi-gros': 0.10,
+            'détails': 0.00,
+        }
+        taux_remise = taux_remise_map.get(self.type_remise, 0.00)
+        montant_remise = montant_brut * Decimal(str(taux_remise))
+        
+        # TVA fixée à 20%
+        # taux_tva = Decimal('0.20')
+        self.montant_ht = montant_brut - montant_remise
+        self.montant_ttc = self.montant_ht * (Decimal('1.0'))
         self.montant_total = self.montant_ttc
-        self.save()
+        # Don't save here - let the caller handle saving
 
 
 class VenteItem(models.Model):
@@ -142,7 +159,7 @@ class VenteItem(models.Model):
                 self.produit.quantite_en_stock = 0
             self.produit.save()
         
-        self.vente.calculer_totaux()
+        # Don't call calculer_totaux here - let the serializer handle it
 
     def delete(self, *args, **kwargs):
         """Restaurer le stock lors de la suppression"""
@@ -150,4 +167,4 @@ class VenteItem(models.Model):
             self.produit.quantite_en_stock += self.quantite
             self.produit.save()
         super().delete(*args, **kwargs)
-        self.vente.calculer_totaux()
+        # Don't call calculer_totaux here - let the caller handle it
