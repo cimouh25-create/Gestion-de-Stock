@@ -26,7 +26,7 @@ class VenteItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VenteItem
-        fields = ['id', 'produit', 'produit_id', 'quantite', 'prix_unitaire', 'montant_total']
+        fields = ['id', 'produit', 'produit_id', 'quantite', 'prix_unitaire', 'type_remise', 'montant_total']
         read_only_fields = ['montant_total']
 
 
@@ -66,7 +66,7 @@ class VenteUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vente
-        fields = ['client', 'statut', 'est_paye', 'type_remise', 'notes', 'items']
+        fields = ['client', 'statut', 'est_paye', 'notes', 'items']
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', [])
@@ -91,7 +91,7 @@ class VenteCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vente
-        fields = ['client', 'statut', 'est_paye', 'type_remise', 'notes', 'items']
+        fields = ['client', 'statut', 'est_paye', 'notes', 'items']
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])

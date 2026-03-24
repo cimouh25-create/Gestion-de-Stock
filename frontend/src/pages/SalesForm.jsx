@@ -10,7 +10,6 @@ export function SalesForm() {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     client: '',
-    type_remise: 'détails',
     est_paye: false,
     statut: 'brouillon',
     items: [],
@@ -21,6 +20,7 @@ export function SalesForm() {
     produit: null,
     quantite: 1,
     prix_unitaire: 0,
+    type_remise: 'détails',
   });
   const [productSearch, setProductSearch] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -54,15 +54,26 @@ export function SalesForm() {
       const sale = await venteService.getById(saleId);
       setFormData({
         client: sale.client.id,
-        type_remise: sale.type_remise,
         est_paye: sale.est_paye,
         statut: sale.statut,
-        items: sale.items.map(item => ({
-          ...item,
-          produit_id: item.produit.id,
-          produit: item.produit,
-          montant_total: item.quantite * item.prix_unitaire,
-        })),
+        items: sale.items.map(item => {
+          // Calculate montant_total with remise applied
+          const remiseRates = {
+            'gros': 0.70,      // 30% discount
+            'semi-gros': 0.90, // 10% discount
+            'détails': 1.00,   // 0% discount
+          };
+          const tauxRemise = remiseRates[item.type_remise] || 1.00;
+          const montantTotal = item.quantite * item.prix_unitaire * tauxRemise;
+          
+          return {
+            ...item,
+            produit_id: item.produit.id,
+            produit: item.produit,
+            montant_total: montantTotal,
+            type_remise: item.type_remise || 'détails',
+          };
+        }),
         notes: sale.notes,
       });
     } catch (err) {
@@ -104,6 +115,15 @@ export function SalesForm() {
       alert('Veuillez sélectionner un produit');
       return;
     }
+    // Calculate montant_total with remise applied
+    const remiseRates = {
+      'gros': 0.70,      // 30% discount
+      'semi-gros': 0.90, // 10% discount
+      'détails': 1.00,   // 0% discount
+    };
+    const tauxRemise = remiseRates[newItem.type_remise] || 1.00;
+    const montantTotal = newItem.quantite * newItem.prix_unitaire * tauxRemise;
+    
     setFormData({
       ...formData,
       items: [
@@ -112,11 +132,11 @@ export function SalesForm() {
           ...newItem,
           produit_id: parseInt(newItem.produit_id),
           produit: newItem.produit,
-          montant_total: newItem.quantite * newItem.prix_unitaire,
+          montant_total: montantTotal,
         },
       ],
     });
-    setNewItem({ produit_id: '', produit: null, quantite: 1, prix_unitaire: 0 });
+    setNewItem({ produit_id: '', produit: null, quantite: 1, prix_unitaire: 0, type_remise: 'détails' });
     setProductSearch('');
   };
 
@@ -148,13 +168,13 @@ export function SalesForm() {
       setError(null);
       const data = {
         client: formData.client,
-        type_remise: formData.type_remise,
         est_paye: formData.est_paye,
         statut: formData.statut,
         items: formData.items.map(item => ({
           produit_id: item.produit_id,
           quantite: parseInt(item.quantite),
           prix_unitaire: parseFloat(item.prix_unitaire),
+          type_remise: item.type_remise,
         })),
         notes: formData.notes,
       };
@@ -181,15 +201,33 @@ export function SalesForm() {
     });
   };
 
-  const remiseRateMap = {
-    'gros': 0.30,
-    'semi-gros': 0.10,
-    'détails': 0.00,
+  const handleItemRemiseChange = (index, newTypeRemise) => {
+    const updatedItems = [...formData.items];
+    const item = updatedItems[index];
+    
+    // Recalculate montant_total with new remise
+    const remiseRates = {
+      'gros': 0.70,      // 30% discount
+      'semi-gros': 0.90, // 10% discount
+      'détails': 1.00,   // 0% discount
+    };
+    const tauxRemise = remiseRates[newTypeRemise] || 1.00;
+    const montantTotal = item.quantite * item.prix_unitaire * tauxRemise;
+    
+    updatedItems[index] = {
+      ...item,
+      type_remise: newTypeRemise,
+      montant_total: montantTotal,
+    };
+    
+    setFormData({
+      ...formData,
+      items: updatedItems,
+    });
   };
-  const montantBrut = formData.items.reduce((sum, item) => sum + item.montant_total, 0);
-  const tauxRemise = remiseRateMap[formData.type_remise] || 0;
-  const montantRemise = montantBrut * tauxRemise;
-  const montantHT = montantBrut - montantRemise;
+
+  const montantHT = formData.items.reduce((sum, item) => sum + item.montant_total, 0);
+  // const montantTVA = montantHT * 0.20; // 20% TVA
   const montantTTC = montantHT;
 
   if (loading) return <div className="w-full min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
@@ -284,19 +322,6 @@ export function SalesForm() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type de remise</label>
-                <select
-                  value={formData.type_remise}
-                  onChange={(e) => setFormData({ ...formData, type_remise: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                >
-                  <option value="gros">Gros (-30%)</option>
-                  <option value="semi-gros">Semi-gros (-10%)</option>
-                  <option value="détails">Détails (0%)</option>
-                </select>
-              </div>
-
               <div className="flex items-end">
                 <label className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200 cursor-pointer hover:bg-blue-100 transition flex-1">
                   <input
@@ -346,7 +371,7 @@ export function SalesForm() {
               </div>
 
               {/* Input Fields - Responsive Grid */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="grid grid-cols-4 gap-2 sm:gap-3">
                 <div className="col-span-1">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Quantité</label>
                   <input
@@ -370,6 +395,18 @@ export function SalesForm() {
                   />
                 </div>
                 <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Type remise</label>
+                  <select
+                    value={newItem.type_remise}
+                    onChange={(e) => setNewItem({ ...newItem, type_remise: e.target.value })}
+                    className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                  >
+                    <option value="gros">Gros (-30%)</option>
+                    <option value="semi-gros">Semi-gros (-10%)</option>
+                    <option value="détails">Détails (0%)</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
                   <button
                     type="button"
                     onClick={handleAddItem}
@@ -389,6 +426,7 @@ export function SalesForm() {
                     <th className="px-4 py-3 text-left">Produit</th>
                     <th className="px-4 py-3 text-center">Quantité</th>
                     <th className="px-4 py-3 text-right">P.U. (DA)</th>
+                    <th className="px-4 py-3 text-center">Type remise</th>
                     <th className="px-4 py-3 text-right">Total (DA)</th>
                     <th className="px-4 py-3 text-center">Action</th>
                   </tr>
@@ -399,6 +437,17 @@ export function SalesForm() {
                       <td className="px-4 py-3 font-medium">{item.produit?.nom}</td>
                       <td className="px-4 py-3 text-center">{item.quantite}</td>
                       <td className="px-4 py-3 text-right">{parseFloat(item.prix_unitaire).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <select
+                          value={item.type_remise}
+                          onChange={(e) => handleItemRemiseChange(idx, e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                        >
+                          <option value="gros">Gros (-30%)</option>
+                          <option value="semi-gros">Semi-gros (-10%)</option>
+                          <option value="détails">Détails (0%)</option>
+                        </select>
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold text-green-600">{item.montant_total.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <button
@@ -429,7 +478,7 @@ export function SalesForm() {
                       ✕
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                     <div>
                       <div className="text-xs text-gray-500">Quantité</div>
                       <div className="font-semibold">{item.quantite}</div>
@@ -437,6 +486,18 @@ export function SalesForm() {
                     <div>
                       <div className="text-xs text-gray-500">P.U.</div>
                       <div className="font-semibold">{parseFloat(item.prix_unitaire).toFixed(2)} DA</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Type remise</div>
+                      <select
+                        value={item.type_remise}
+                        onChange={(e) => handleItemRemiseChange(idx, e.target.value)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                      >
+                        <option value="gros">Gros (-30%)</option>
+                        <option value="semi-gros">Semi-gros (-10%)</option>
+                        <option value="détails">Détails (0%)</option>
+                      </select>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Total</div>
@@ -454,14 +515,6 @@ export function SalesForm() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-700">Montant HT:</span>
-                <span className="font-semibold text-lg text-gray-900">{montantBrut.toFixed(2)} DA</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Remise ({(tauxRemise * 100).toFixed(0)}%):</span>
-                <span className="font-semibold text-lg text-red-600">-{montantRemise.toFixed(2)} DA</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Montant HT après remise:</span>
                 <span className="font-semibold text-lg text-gray-900">{montantHT.toFixed(2)} DA</span>
               </div>
               <div className="border-t-2 border-blue-200 pt-3 flex justify-between items-center">
@@ -548,10 +601,10 @@ export function SalesForm() {
         </div>
 
         <div className="sales-order-totals">
-          <div><span>Montant HT:</span> <span>{montantBrut.toFixed(2)} DA</span></div>
-          {montantRemise > 0 && (
+          <div><span>Montant HT:</span> <span>{montantHT.toFixed(2)} DA</span></div>
+          {/* {montantRemise > 0 && (
             <div><span>Remise ({(tauxRemise * 100).toFixed(0)}%):</span> <span>-{montantRemise.toFixed(2)} DA</span></div>
-          )}
+          )} */}
           <div><span>Montant HT après remise:</span> <span>{montantHT.toFixed(2)} DA</span></div>
           <div className="total"><span>Montant TTC:</span> <span>{montantTTC.toFixed(2)} DA</span></div>
         </div>

@@ -44,19 +44,12 @@ class Vente(models.Model):
         ('annulée', 'Annulée'),
     ]
     
-    REMISE_TYPES = [
-        ('gros', 'Gros (-30%)'),
-        ('semi-gros', 'Semi-gros (-10%)'),
-        ('détails', 'Détails (0%)'),
-    ]
-    
     numero = models.CharField(max_length=50, unique=True, blank=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='ventes')
     date_vente = models.DateField(auto_now_add=True)
     statut = models.CharField(max_length=20, choices=STATUTS, default='brouillon')
     est_paye = models.BooleanField(default=False, verbose_name="Payé")
     montant_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    type_remise = models.CharField(max_length=20, choices=REMISE_TYPES, default='détails')
     montant_ht = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_ttc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     utilisateur = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
@@ -100,30 +93,27 @@ class Vente(models.Model):
     def calculer_totaux(self):
         """Recalcule les montants totaux"""
         items = self.items.all()
-        montant_brut = sum(item.montant_total for item in items)
-        
-        # Calculer la remise en fonction du type
-        taux_remise_map = {
-            'gros': 0.30,
-            'semi-gros': 0.10,
-            'détails': 0.00,
-        }
-        taux_remise = taux_remise_map.get(self.type_remise, 0.00)
-        montant_remise = montant_brut * Decimal(str(taux_remise))
-        
+        # Each item already has remise applied, so sum them up
+        self.montant_ht = sum(item.montant_total for item in items)
         # TVA fixée à 20%
-        # taux_tva = Decimal('0.20')
-        self.montant_ht = montant_brut - montant_remise
-        self.montant_ttc = self.montant_ht * (Decimal('1.0'))
+        taux_tva = Decimal('0.20')
+        self.montant_ttc = self.montant_ht * (Decimal('1.0') + 0)
         self.montant_total = self.montant_ttc
         # Don't save here - let the caller handle saving
 
 
 class VenteItem(models.Model):
+    REMISE_TYPES = [
+        ('gros', 'Gros (-30%)'),
+        ('semi-gros', 'Semi-gros (-10%)'),
+        ('détails', 'Détails (0%)'),
+    ]
+    
     vente = models.ForeignKey(Vente, on_delete=models.CASCADE, related_name='items')
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     quantite = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    type_remise = models.CharField(max_length=20, choices=REMISE_TYPES, default='détails')
     montant_total = models.DecimalField(max_digits=12, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -149,7 +139,14 @@ class VenteItem(models.Model):
         # Calculer la différence de quantité
         quantity_diff = self.quantite - old_quantity
         
-        self.montant_total = self.quantite * self.prix_unitaire
+        # Calculer le montant total avec remise
+        remise_rates = {
+            'gros': 0.70,      # 30% discount = 70% of price
+            'semi-gros': 0.90, # 10% discount = 90% of price
+            'détails': 1.00,   # 0% discount = 100% of price
+        }
+        taux_remise = remise_rates.get(self.type_remise, 1.00)
+        self.montant_total = self.quantite * self.prix_unitaire * Decimal(str(taux_remise))
         super().save(*args, **kwargs)
         
         # Mettre à jour le stock du produit si la vente est confirmée

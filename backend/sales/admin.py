@@ -32,7 +32,7 @@ class ClientAdmin(admin.ModelAdmin):
 @admin.register(Vente)
 class VenteAdmin(admin.ModelAdmin):
     list_display = ['numero', 'client', 'date_vente', 'statut', 'montant_ttc', 'utilisateur']
-    list_filter = ['statut', 'date_vente', 'type_remise']
+    list_filter = ['statut', 'date_vente']
     search_fields = ['numero', 'client__nom']
     readonly_fields = ['numero', 'montant_total', 'montant_ht', 'montant_ttc', 'created_at', 'updated_at']
     inlines = [VenteItemInline]
@@ -41,7 +41,7 @@ class VenteAdmin(admin.ModelAdmin):
             'fields': ('numero', 'client', 'date_vente', 'utilisateur', 'statut')
         }),
         ('Détails commerciaux', {
-            'fields': ('type_remise',)
+            'fields': ()
         }),
         ('Calculs', {
             'fields': ('montant_ht', 'montant_ttc', 'montant_total'),
