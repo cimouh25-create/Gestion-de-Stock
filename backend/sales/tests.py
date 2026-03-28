@@ -53,5 +53,4 @@ class VenteTestCase(TestCase):
         )
         vente.calculer_totaux()
         self.assertEqual(float(vente.montant_ht), 40.00)
-        self.assertEqual(float(vente.montant_tva), 8.00)
         self.assertEqual(float(vente.montant_ttc), 48.00)

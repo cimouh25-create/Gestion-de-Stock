@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { venteService, clientService, produitService } from '../services/api';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { FiCamera, FiX } from 'react-icons/fi';
 
 export function SalesForm() {
   const { id } = useParams();
@@ -10,8 +12,6 @@ export function SalesForm() {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     client: '',
-    montant_remise: 0,
-    taux_tva: 20,
     est_paye: false,
     statut: 'brouillon',
     items: [],
@@ -22,12 +22,16 @@ export function SalesForm() {
     produit: null,
     quantite: 1,
     prix_unitaire: 0,
+    type_remise: 'détails',
   });
   const [productSearch, setProductSearch] = useState('');
+  const [barcode, setBarcode] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const scannerRef = useRef(null);
 
   useEffect(() => {
     loadData();
@@ -35,6 +39,10 @@ export function SalesForm() {
       loadSale();
     }
   }, [saleId]);
+
+  useEffect(() => {
+    return () => stopScanner();
+  }, []);
 
   const loadData = async () => {
     try {
@@ -55,16 +63,26 @@ export function SalesForm() {
       const sale = await venteService.getById(saleId);
       setFormData({
         client: sale.client.id,
-        montant_remise: sale.montant_remise,
-        taux_tva: sale.taux_tva,
         est_paye: sale.est_paye,
         statut: sale.statut,
-        items: sale.items.map(item => ({
-          ...item,
-          produit_id: item.produit.id,
-          produit: item.produit,
-          montant_total: item.quantite * item.prix_unitaire,
-        })),
+        items: sale.items.map(item => {
+          // Calculate montant_total with remise applied
+          const remiseRates = {
+            'gros': 0.70,      // 30% discount
+            'semi-gros': 0.90, // 10% discount
+            'détails': 1.00,   // 0% discount
+          };
+          const tauxRemise = remiseRates[item.type_remise] || 1.00;
+          const montantTotal = item.quantite * item.prix_unitaire * tauxRemise;
+          
+          return {
+            ...item,
+            produit_id: item.produit.id,
+            produit: item.produit,
+            montant_total: montantTotal,
+            type_remise: item.type_remise || 'détails',
+          };
+        }),
         notes: sale.notes,
       });
     } catch (err) {
@@ -106,6 +124,15 @@ export function SalesForm() {
       alert('Veuillez sélectionner un produit');
       return;
     }
+    // Calculate montant_total with remise applied
+    const remiseRates = {
+      'gros': 0.70,      // 30% discount
+      'semi-gros': 0.90, // 10% discount
+      'détails': 1.00,   // 0% discount
+    };
+    const tauxRemise = remiseRates[newItem.type_remise] || 1.00;
+    const montantTotal = newItem.quantite * newItem.prix_unitaire * tauxRemise;
+    
     setFormData({
       ...formData,
       items: [
@@ -114,12 +141,103 @@ export function SalesForm() {
           ...newItem,
           produit_id: parseInt(newItem.produit_id),
           produit: newItem.produit,
-          montant_total: newItem.quantite * newItem.prix_unitaire,
+          montant_total: montantTotal,
         },
       ],
     });
-    setNewItem({ produit_id: '', produit: null, quantite: 1, prix_unitaire: 0 });
+    setNewItem({ produit_id: '', produit: null, quantite: 1, prix_unitaire: 0, type_remise: 'détails' });
     setProductSearch('');
+  };
+
+  const addByBarcode = async (code) => {
+    const cleanedCode = code.trim();
+    if (!cleanedCode) return;
+
+    try {
+      const data = await produitService.getAll(1, cleanedCode);
+      const results = data.results || data;
+
+      const product = results.find(p => p.reference === cleanedCode) || (results.length === 1 ? results[0] : null);
+
+      if (product) {
+        const remiseRates = { 'gros': 0.70, 'semi-gros': 0.90, 'détails': 1.00 };
+        const typeRemise = 'détails';
+        const montantTotal = 1 * product.prix_vente * remiseRates[typeRemise];
+
+        setFormData(prev => ({
+          ...prev,
+          items: [
+            ...prev.items,
+            {
+              produit_id: product.id,
+              produit: product,
+              quantite: 1,
+              prix_unitaire: product.prix_vente,
+              type_remise: typeRemise,
+              montant_total: montantTotal,
+            },
+          ],
+        }));
+        setBarcode('');
+        return true;
+      } else {
+        alert(`Produit non trouvé pour le code: ${cleanedCode}`);
+        return false;
+      }
+    } catch (err) {
+      setError('Erreur lors de la recherche du produit');
+      return false;
+    }
+  };
+
+  const handleBarcodeKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addByBarcode(barcode);
+    }
+  };
+
+  const startScanner = async () => {
+    setShowScanner(true);
+    setTimeout(async () => {
+      try {
+        const html5QrCode = new Html5Qrcode("reader");
+        scannerRef.current = html5QrCode;
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          { 
+            fps: 20, 
+            qrbox: { width: 300, height: 150 }, // Rectangular box is better for 1D barcodes
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.QR_CODE
+            ]
+          },
+          async (decodedText) => {
+            const success = await addByBarcode(decodedText);
+            if (success) stopScanner();
+          },
+          () => {} // Ignore scan errors (common during seeking)
+        );
+      } catch (err) {
+        console.error("Camera Error:", err);
+        setError(`Erreur Caméra: ${err.message || "Accès refusé (Vérifiez HTTPS)"}`);
+        setShowScanner(false);
+      }
+    }, 100);
+  };
+
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+      } catch (err) { /* already stopped */ }
+      scannerRef.current = null;
+    }
+    setShowScanner(false);
   };
 
   const handleStatusChange = (newStatus) => {
@@ -150,14 +268,13 @@ export function SalesForm() {
       setError(null);
       const data = {
         client: formData.client,
-        montant_remise: parseFloat(formData.montant_remise),
-        taux_tva: parseFloat(formData.taux_tva),
         est_paye: formData.est_paye,
         statut: formData.statut,
         items: formData.items.map(item => ({
           produit_id: item.produit_id,
           quantite: parseInt(item.quantite),
           prix_unitaire: parseFloat(item.prix_unitaire),
+          type_remise: item.type_remise,
         })),
         notes: formData.notes,
       };
@@ -177,9 +294,41 @@ export function SalesForm() {
     }
   };
 
-  const montantHT = formData.items.reduce((sum, item) => sum + item.montant_total, 0) - parseFloat(formData.montant_remise);
-  const montantTVA = montantHT * (parseFloat(formData.taux_tva) / 100);
-  const montantTTC = montantHT + montantTVA;
+  const handleRemoveItem = (index) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((_, i) => i !== index),
+    });
+  };
+
+  const handleItemRemiseChange = (index, newTypeRemise) => {
+    const updatedItems = [...formData.items];
+    const item = updatedItems[index];
+    
+    // Recalculate montant_total with new remise
+    const remiseRates = {
+      'gros': 0.70,      // 30% discount
+      'semi-gros': 0.90, // 10% discount
+      'détails': 1.00,   // 0% discount
+    };
+    const tauxRemise = remiseRates[newTypeRemise] || 1.00;
+    const montantTotal = item.quantite * item.prix_unitaire * tauxRemise;
+    
+    updatedItems[index] = {
+      ...item,
+      type_remise: newTypeRemise,
+      montant_total: montantTotal,
+    };
+    
+    setFormData({
+      ...formData,
+      items: updatedItems,
+    });
+  };
+
+  const montantHT = formData.items.reduce((sum, item) => sum + item.montant_total, 0);
+  // const montantTVA = montantHT * 0.20; // 20% TVA
+  const montantTTC = montantHT;
 
   if (loading) return <div className="w-full min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
 
@@ -273,17 +422,6 @@ export function SalesForm() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Taux TVA (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.taux_tva}
-                  onChange={(e) => setFormData({ ...formData, taux_tva: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                />
-              </div>
-
               <div className="flex items-end">
                 <label className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200 cursor-pointer hover:bg-blue-100 transition flex-1">
                   <input
@@ -301,6 +439,40 @@ export function SalesForm() {
           {/* Products Section */}
           <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 sm:p-6 md:p-8">
             <h2 className="text-lg font-semibold text-gray-800 mb-6">🛍️ Produits *</h2>
+
+            {/* Barcode Scanner Input */}
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+              <label className="block text-sm font-semibold text-blue-800 mb-2">🔍 Recherche par Code-barres</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    onKeyDown={handleBarcodeKeyDown}
+                    placeholder="Tapez la référence..."
+                    className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition"
+                  />
+                  <span className="absolute right-3 top-2 text-blue-400 text-xs">⌨️ Enter</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={showScanner ? stopScanner : startScanner}
+                  className={`px-4 py-2 rounded-lg flex items-center gap-2 transition font-medium ${
+                    showScanner ? 'bg-red-100 text-red-600' : 'bg-blue-600 text-white'
+                  }`}
+                >
+                  {showScanner ? <FiX /> : <FiCamera />}
+                  {showScanner ? 'Arrêter' : 'Caméra'}
+                </button>
+              </div>
+              {showScanner && (
+                <div className="mt-4 overflow-hidden rounded-lg border-2 border-blue-400">
+                  <div id="reader" style={{ width: '100%' }}></div>
+                </div>
+              )}
+              </div>
+            </div>
 
             {/* Search & Add Item */}
             <div className="space-y-4 mb-6">
@@ -333,7 +505,7 @@ export function SalesForm() {
               </div>
 
               {/* Input Fields - Responsive Grid */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="grid grid-cols-4 gap-2 sm:gap-3">
                 <div className="col-span-1">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Quantité</label>
                   <input
@@ -357,6 +529,18 @@ export function SalesForm() {
                   />
                 </div>
                 <div className="col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Type remise</label>
+                  <select
+                    value={newItem.type_remise}
+                    onChange={(e) => setNewItem({ ...newItem, type_remise: e.target.value })}
+                    className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                  >
+                    <option value="gros">Gros (-30%)</option>
+                    <option value="semi-gros">Semi-gros (-10%)</option>
+                    <option value="détails">Détails (0%)</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
                   <button
                     type="button"
                     onClick={handleAddItem}
@@ -376,6 +560,7 @@ export function SalesForm() {
                     <th className="px-4 py-3 text-left">Produit</th>
                     <th className="px-4 py-3 text-center">Quantité</th>
                     <th className="px-4 py-3 text-right">P.U. (DA)</th>
+                    <th className="px-4 py-3 text-center">Type remise</th>
                     <th className="px-4 py-3 text-right">Total (DA)</th>
                     <th className="px-4 py-3 text-center">Action</th>
                   </tr>
@@ -386,6 +571,17 @@ export function SalesForm() {
                       <td className="px-4 py-3 font-medium">{item.produit?.nom}</td>
                       <td className="px-4 py-3 text-center">{item.quantite}</td>
                       <td className="px-4 py-3 text-right">{parseFloat(item.prix_unitaire).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <select
+                          value={item.type_remise}
+                          onChange={(e) => handleItemRemiseChange(idx, e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                        >
+                          <option value="gros">Gros (-30%)</option>
+                          <option value="semi-gros">Semi-gros (-10%)</option>
+                          <option value="détails">Détails (0%)</option>
+                        </select>
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold text-green-600">{item.montant_total.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <button
@@ -416,7 +612,7 @@ export function SalesForm() {
                       ✕
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                     <div>
                       <div className="text-xs text-gray-500">Quantité</div>
                       <div className="font-semibold">{item.quantite}</div>
@@ -424,6 +620,18 @@ export function SalesForm() {
                     <div>
                       <div className="text-xs text-gray-500">P.U.</div>
                       <div className="font-semibold">{parseFloat(item.prix_unitaire).toFixed(2)} DA</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">Type remise</div>
+                      <select
+                        value={item.type_remise}
+                        onChange={(e) => handleItemRemiseChange(idx, e.target.value)}
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                      >
+                        <option value="gros">Gros (-30%)</option>
+                        <option value="semi-gros">Semi-gros (-10%)</option>
+                        <option value="détails">Détails (0%)</option>
+                      </select>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-gray-500">Total</div>
@@ -433,7 +641,7 @@ export function SalesForm() {
                 </div>
               ))}
             </div>
-          </div>
+          {/* </div> */}
 
           {/* Summary Section */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-md border border-blue-200 p-4 sm:p-6">
@@ -442,20 +650,6 @@ export function SalesForm() {
               <div className="flex justify-between items-center">
                 <span className="text-gray-700">Montant HT:</span>
                 <span className="font-semibold text-lg text-gray-900">{montantHT.toFixed(2)} DA</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Remise:</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.montant_remise}
-                  onChange={(e) => setFormData({ ...formData, montant_remise: e.target.value })}
-                  className="w-32 px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-right"
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">TVA ({formData.taux_tva}%):</span>
-                <span className="font-semibold text-lg text-gray-900">{montantTVA.toFixed(2)} DA</span>
               </div>
               <div className="border-t-2 border-blue-200 pt-3 flex justify-between items-center">
                 <span className="text-lg font-bold text-gray-900">Montant TTC:</span>
@@ -542,10 +736,10 @@ export function SalesForm() {
 
         <div className="sales-order-totals">
           <div><span>Montant HT:</span> <span>{montantHT.toFixed(2)} DA</span></div>
-          {parseFloat(formData.montant_remise) > 0 && (
-            <div><span>Remise:</span> <span>-{parseFloat(formData.montant_remise).toFixed(2)} DA</span></div>
-          )}
-          <div><span>TVA ({formData.taux_tva}%):</span> <span>{montantTVA.toFixed(2)} DA</span></div>
+          {/* {montantRemise > 0 && (
+            <div><span>Remise ({(tauxRemise * 100).toFixed(0)}%):</span> <span>-{montantRemise.toFixed(2)} DA</span></div>
+          )} */}
+          <div><span>Montant HT après remise:</span> <span>{montantHT.toFixed(2)} DA</span></div>
           <div className="total"><span>Montant TTC:</span> <span>{montantTTC.toFixed(2)} DA</span></div>
         </div>
 
