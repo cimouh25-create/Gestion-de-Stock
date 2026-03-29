@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Categorie, Fournisseur, Produit
+from .models import Categorie, Fournisseur, Produit, Achat, AchatItem
 
 
 class CategorieSerializer(serializers.ModelSerializer):
@@ -42,15 +42,15 @@ class ProduitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Produit
         fields = [
-            'id', 'nom', 'reference', 'description',
+            'id', 'nom', 'reference', 'barcode', 'description',
             'categorie', 'categorie_nom',
             'fournisseur', 'fournisseur_nom',
-            'image', 'image_url', 'prix_achat', 'prix_vente',
+            'image', 'image_url', 'prix_achat', 'prix_vente', 'cout_moyen_pondere',
             'quantite_en_stock', 'seuil_alerte',
             'stock_critique', 'valeur_stock',
             'est_actif', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'cout_moyen_pondere']
 
 
 class ProduitListSerializer(serializers.ModelSerializer):
@@ -70,9 +70,48 @@ class ProduitListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Produit
         fields = [
-            'id', 'nom', 'reference', 'description', 'categorie_nom',
+            'id', 'nom', 'reference', 'barcode', 'description', 'categorie_nom',
             'image', 'image_url',
-            'prix_achat', 'prix_vente',
+            'prix_achat', 'prix_vente', 'cout_moyen_pondere',
             'quantite_en_stock', 'seuil_alerte',
             'stock_critique', 'est_actif',
+        ]
+
+
+class AchatItemSerializer(serializers.ModelSerializer):
+    produit_nom = serializers.CharField(source='produit.nom', read_only=True)
+    produit_reference = serializers.CharField(source='produit.reference', read_only=True)
+
+    class Meta:
+        model = AchatItem
+        fields = ['id', 'produit', 'produit_nom', 'produit_reference', 
+                  'quantite', 'prix_unitaire', 'montant_total']
+
+
+class AchatSerializer(serializers.ModelSerializer):
+    items = AchatItemSerializer(many=True, read_only=True)
+    fournisseur_nom = serializers.CharField(source='fournisseur.nom', read_only=True)
+
+    class Meta:
+        model = Achat
+        fields = [
+            'id', 'numero', 'fournisseur', 'fournisseur_nom',
+            'date_achat', 'date_reception', 'statut',
+            'montant_ht', 'montant_remise', 'montant_tva', 'montant_ttc',
+            'taux_tva', 'notes', 'items', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['numero', 'created_at', 'updated_at', 'montant_ht', 
+                           'montant_tva', 'montant_ttc', 'montant_total']
+
+
+class AchatListSerializer(serializers.ModelSerializer):
+    fournisseur_nom = serializers.CharField(source='fournisseur.nom', read_only=True)
+    nombre_articles = serializers.IntegerField(source='items.count', read_only=True)
+
+    class Meta:
+        model = Achat
+        fields = [
+            'id', 'numero', 'fournisseur', 'fournisseur_nom',
+            'date_achat', 'date_reception', 'statut',
+            'montant_ttc', 'nombre_articles'
         ]

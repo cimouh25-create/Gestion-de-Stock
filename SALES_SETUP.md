@@ -99,7 +99,6 @@ The frontend will be available at `http://localhost:5173`
 - `DELETE /api/ventes/{id}/` - Delete a sale
 - `GET /api/ventes/statistiques/?jours=30` - Get sales statistics
 - `POST /api/ventes/{id}/valider/` - Validate a draft sale
-- `POST /api/ventes/{id}/livrer/` - Mark sale as delivered
 - `POST /api/ventes/{id}/annuler/` - Cancel a sale
 
 ### Products
@@ -127,7 +126,7 @@ The frontend will be available at `http://localhost:5173`
 - numero (CharField): Unique invoice number (auto-generated)
 - client (ForeignKey): Related client
 - date_vente (DateField)
-- statut (ChoiceField): brouillon, confirmée, livrée, annulée
+- statut (ChoiceField): brouillon, confirmée, annulée
 - montant_total, montant_ht, montant_tva, montant_ttc (DecimalField)
 - montant_remise (DecimalField): Discount amount
 - taux_tva (DecimalField): VAT rate (default 20%)

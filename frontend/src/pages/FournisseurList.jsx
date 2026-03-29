@@ -77,112 +77,189 @@ export function FournisseurList() {
     }
   };
 
-  if (loading) return <div className="text-center py-4">Chargement...</div>;
-  if (error) return <div className="bg-red-100 text-red-700 p-4 rounded">{error}</div>;
+  if (loading) return <div className="w-full min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Fournisseurs</h2>
-        <div className="flex gap-2">
-          {selectedFournisseurs.length > 0 && (
+    <div className="w-full min-h-screen bg-gray-50 px-4 py-8 md:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">💼 Fournisseurs</h1>
+            <p className="text-sm text-gray-500 mt-1">{fournisseurs.length} fournisseur(s)</p>
+          </div>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            {selectedFournisseurs.length > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="flex-1 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
+              >
+                🗑️ Supprimer {selectedFournisseurs.length > 0 && `(${selectedFournisseurs.length})`}
+              </button>
+            )}
             <button
-              onClick={handleDeleteSelected}
-              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 font-medium"
+              onClick={() => navigate('/fournisseurs/new')}
+              className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition flex items-center justify-center gap-2"
             >
-              🗑️ Supprimer ({selectedFournisseurs.length})
+              ➕ Nouveau
             </button>
-          )}
-          <button
-            onClick={() => navigate('/fournisseurs/new')}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
-          >
-            + Nouveau fournisseur
-          </button>
+          </div>
         </div>
-      </div>
 
-      <div className="relative">
-        <input
-          type="text"
-          placeholder="Rechercher..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-gray-300 px-3 py-2 pr-10 rounded"
-        />
-        {search && (
-          <button
-            onClick={() => setSearch('')}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-          >
-            ✕
-          </button>
+        {/* Error Alert */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+            <span className="text-red-600 text-lg">⚠️</span>
+            <div>
+              <h3 className="font-semibold text-red-800">Erreur</h3>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
         )}
-      </div>
 
-      <div className="overflow-x-auto rounded-lg shadow-md bg-white">
-        <table className="w-full min-w-[700px]">
-          <thead className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
-            <tr>
-              <th className="px-3 md:px-6 py-4 text-center font-semibold text-xs md:text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedFournisseurs.length === fournisseurs.length && fournisseurs.length > 0}
-                  onChange={handleSelectAll}
-                  className="rounded"
-                />
-              </th>
-              <th className="px-3 md:px-6 py-4 text-left font-semibold text-xs md:text-sm">Nom</th>
-              <th className="px-3 md:px-6 py-4 text-left font-semibold text-xs md:text-sm hidden md:table-cell">Email</th>
-              <th className="px-3 md:px-6 py-4 text-left font-semibold text-xs md:text-sm">Téléphone</th>
-              <th className="px-3 md:px-6 py-4 text-left font-semibold text-xs md:text-sm hidden md:table-cell">Adresse</th>
-              <th className="px-3 md:px-6 py-4 text-center font-semibold text-xs md:text-sm">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {fournisseurs.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="text-center py-12 text-gray-400">
-                  <div className="flex flex-col items-center gap-2">
-                    <span className="text-4xl">🏭</span>
-                    <span>Aucun fournisseur trouvé</span>
-                  </div>
-                </td>
+        {/* Search Box */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="🔍 Rechercher un fournisseur..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden sm:block bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                <th className="px-6 py-4 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedFournisseurs.length === fournisseurs.length && fournisseurs.length > 0}
+                    onChange={handleSelectAll}
+                    className="w-5 h-5 rounded"
+                  />
+                </th>
+                <th className="px-6 py-4 text-left font-semibold text-sm">Nom</th>
+                <th className="px-6 py-4 text-left font-semibold text-sm">Email</th>
+                <th className="px-6 py-4 text-left font-semibold text-sm">Téléphone</th>
+                <th className="px-6 py-4 text-left font-semibold text-sm">Adresse</th>
+                <th className="px-6 py-4 text-center font-semibold text-sm">Actions</th>
               </tr>
-            ) : (
-              fournisseurs.map((fournisseur) => (
-                <tr key={fournisseur.id} className="hover:bg-blue-50 transition-colors duration-150">
-                  <td className="px-3 md:px-6 py-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedFournisseurs.includes(fournisseur.id)}
-                      onChange={() => handleSelectFournisseur(fournisseur.id)}
-                      className="rounded"
-                    />
-                  </td>
-                  <td className="px-3 md:px-6 py-4 font-semibold text-gray-900 text-xs md:text-sm">{fournisseur.nom}</td>
-                  <td className="px-3 md:px-6 py-4 text-gray-600 text-xs md:text-sm hidden md:table-cell">{fournisseur.email}</td>
-                  <td className="px-3 md:px-6 py-4 text-gray-600 text-xs md:text-sm">{fournisseur.telephone}</td>
-                  <td className="px-3 md:px-6 py-4 text-gray-600 text-xs md:text-sm text-xs line-clamp-2 hidden md:table-cell">{fournisseur.adresse}</td>
-                  <td className="px-3 md:px-6 py-4 text-center space-x-1 md:space-x-2">
-                    <button
-                      onClick={() => navigate(`/fournisseurs/${fournisseur.id}/edit`)}
-                      className="inline-flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors duration-150 text-xs md:text-sm font-medium"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => handleDelete(fournisseur.id)}
-                      className="inline-flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors duration-150 text-xs md:text-sm font-medium"
-                    >
-                      🗑️
-                    </button>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {fournisseurs.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-12">
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <span className="text-4xl">🏭</span>
+                      <span>Aucun fournisseur trouvé</span>
+                    </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                fournisseurs.map((fournisseur) => (
+                  <tr key={fournisseur.id} className="hover:bg-blue-50 transition">
+                    <td className="px-6 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedFournisseurs.includes(fournisseur.id)}
+                        onChange={() => handleSelectFournisseur(fournisseur.id)}
+                        className="w-5 h-5 rounded"
+                      />
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-gray-900">{fournisseur.nom}</td>
+                    <td className="px-6 py-4 text-gray-600 text-sm">{fournisseur.email || '-'}</td>
+                    <td className="px-6 py-4 text-gray-600 text-sm">{fournisseur.telephone || '-'}</td>
+                    <td className="px-6 py-4 text-gray-600 text-sm line-clamp-2">{fournisseur.adresse || '-'}</td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          onClick={() => navigate(`/fournisseurs/${fournisseur.id}/edit`)}
+                          className="px-3 py-1 text-blue-600 hover:bg-blue-100 rounded-lg transition font-medium"
+                        >
+                          ✏️ 
+                        </button>
+                        <button
+                          onClick={() => handleDelete(fournisseur.id)}
+                          className="px-3 py-1 text-red-600 hover:bg-red-100 rounded-lg transition font-medium"
+                        >
+                          🗑️ 
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="sm:hidden space-y-3">
+          {fournisseurs.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-4xl">🏭</span>
+                <span>Aucun fournisseur trouvé</span>
+              </div>
+            </div>
+          ) : (
+            fournisseurs.map((fournisseur) => (
+              <div key={fournisseur.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
+                <div className="flex items-start gap-3 mb-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedFournisseurs.includes(fournisseur.id)}
+                    onChange={() => handleSelectFournisseur(fournisseur.id)}
+                    className="w-5 h-5 rounded mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate">{fournisseur.nom}</h3>
+                    <p className="text-xs text-gray-500">{fournisseur.email || '-'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                  <div className="bg-gray-50 p-2 rounded">
+                    <div className="text-xs text-gray-500">Téléphone</div>
+                    <div className="font-semibold text-gray-800 truncate">{fournisseur.telephone || '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 p-2 rounded">
+                    <div className="text-xs text-gray-500">Adresse</div>
+                    <div className="font-semibold text-gray-800 line-clamp-1">{fournisseur.adresse ? fournisseur.adresse.substring(0, 20) + '...' : '-'}</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/fournisseurs/${fournisseur.id}/edit`)}
+                    className="flex-1 px-3 py-2 text-blue-600 hover:bg-blue-100 rounded-lg transition font-medium text-sm"
+                  >
+                    ✏️ Modifier
+                  </button>
+                  <button
+                    onClick={() => handleDelete(fournisseur.id)}
+                    className="flex-1 px-3 py-2 text-red-600 hover:bg-red-100 rounded-lg transition font-medium text-sm"
+                  >
+                    🗑️ Supprimer
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

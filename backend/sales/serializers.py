@@ -26,7 +26,7 @@ class VenteItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VenteItem
-        fields = ['id', 'produit', 'produit_id', 'quantite', 'prix_unitaire', 'montant_total']
+        fields = ['id', 'produit', 'produit_id', 'quantite', 'prix_unitaire', 'type_remise', 'montant_total']
         read_only_fields = ['montant_total']
 
 
@@ -38,7 +38,7 @@ class VenteDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Vente
         fields = '__all__'
-        read_only_fields = ['numero', 'montant_total', 'montant_ht', 'montant_tva', 'montant_ttc', 'created_at', 'updated_at']
+        read_only_fields = ['numero', 'montant_total', 'montant_ht', 'montant_ttc', 'created_at', 'updated_at']
 
     def get_utilisateur_nom(self, obj):
         if obj.utilisateur:
@@ -66,7 +66,7 @@ class VenteUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vente
-        fields = ['client', 'statut', 'est_paye', 'montant_remise', 'taux_tva', 'notes', 'items']
+        fields = ['client', 'statut', 'est_paye', 'notes', 'items']
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', [])
@@ -82,6 +82,7 @@ class VenteUpdateSerializer(serializers.ModelSerializer):
             VenteItem.objects.create(vente=instance, **item_data)
         
         instance.calculer_totaux()
+        instance.save()
         return instance
 
 
@@ -90,7 +91,7 @@ class VenteCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vente
-        fields = ['client', 'statut', 'est_paye', 'montant_remise', 'taux_tva', 'notes', 'items']
+        fields = ['client', 'statut', 'est_paye', 'notes', 'items']
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
@@ -101,4 +102,5 @@ class VenteCreateSerializer(serializers.ModelSerializer):
             VenteItem.objects.create(vente=vente, **item_data)
         
         vente.calculer_totaux()
+        vente.save()
         return vente

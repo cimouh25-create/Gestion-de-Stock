@@ -1,3 +1,5 @@
+import { authService } from './authService';
+
 // Use network IP for mobile access, localhost for development
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:8000/api'
@@ -5,61 +7,100 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 
 const getAuthToken = () => localStorage.getItem('access_token');
 
-const getHeaders = () => {
+// Helper function to handle API requests with token refresh support
+const apiRequest = async (endpoint, options = {}) => {
+  const { errorMessage = 'Une erreur est survenue', ...customOptions } = options;
+  
   const headers = {
     'Content-Type': 'application/json',
+    ...customOptions.headers,
   };
+
   const token = getAuthToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  return headers;
+
+  // Handle FormData (remove Content-Type to let browser set boundary)
+  if (customOptions.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+
+  const config = {
+    ...customOptions,
+    headers,
+  };
+
+  const url = `${API_BASE_URL}${endpoint}`;
+
+  try {
+    let response = await fetch(url, config);
+
+    // If 401 Unauthorized, try to refresh token and retry
+    if (response.status === 401) {
+      try {
+        await authService.refreshToken();
+        
+        // Retry with new token
+        const newToken = getAuthToken();
+        if (newToken) {
+          config.headers['Authorization'] = `Bearer ${newToken}`;
+        }
+        response = await fetch(url, config);
+      } catch (refreshError) {
+        // If refresh fails, logout and redirect
+        authService.logout();
+        window.location.href = '/sign-in';
+        throw new Error('Session expirée');
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(errorMessage);
+    }
+
+    // Return null for 204 No Content
+    if (response.status === 204) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const clientService = {
   getAll: async (page = 1, search = '') => {
     const params = new URLSearchParams({ page, search });
-    const response = await fetch(`${API_BASE_URL}/clients/?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch clients');
-    return response.json();
+    return apiRequest(`/clients/?${params}`, { errorMessage: 'Failed to fetch clients' });
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/clients/${id}/`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch client');
-    return response.json();
+    return apiRequest(`/clients/${id}/`, { errorMessage: 'Failed to fetch client' });
   },
 
   create: async (data) => {
-    const response = await fetch(`${API_BASE_URL}/clients/`, {
+    return apiRequest('/clients/', {
       method: 'POST',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to create client',
     });
-    if (!response.ok) throw new Error('Failed to create client');
-    return response.json();
   },
 
   update: async (id, data) => {
-    const response = await fetch(`${API_BASE_URL}/clients/${id}/`, {
+    return apiRequest(`/clients/${id}/`, {
       method: 'PUT',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to update client',
     });
-    if (!response.ok) throw new Error('Failed to update client');
-    return response.json();
   },
 
   delete: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/clients/${id}/`, {
+    return apiRequest(`/clients/${id}/`, {
       method: 'DELETE',
-      headers: getHeaders(),
+      errorMessage: 'Failed to delete client',
     });
-    if (!response.ok) throw new Error('Failed to delete client');
   },
 };
 
@@ -67,232 +108,236 @@ export const venteService = {
   getAll: async (page = 1, search = '', statut = '') => {
     const params = new URLSearchParams({ page, search });
     if (statut) params.append('statut', statut);
-    const response = await fetch(`${API_BASE_URL}/ventes/?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch sales');
-    return response.json();
+    return apiRequest(`/ventes/?${params}`, { errorMessage: 'Failed to fetch sales' });
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/${id}/`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch sale');
-    return response.json();
+    return apiRequest(`/ventes/${id}/`, { errorMessage: 'Failed to fetch sale' });
   },
 
   create: async (data) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/`, {
+    return apiRequest('/ventes/', {
       method: 'POST',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to create sale',
     });
-    if (!response.ok) throw new Error('Failed to create sale');
-    return response.json();
   },
 
   update: async (id, data) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/${id}/`, {
+    return apiRequest(`/ventes/${id}/`, {
       method: 'PUT',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to update sale',
     });
-    if (!response.ok) throw new Error('Failed to update sale');
-    return response.json();
   },
 
   delete: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/${id}/`, {
+    return apiRequest(`/ventes/${id}/`, {
       method: 'DELETE',
-      headers: getHeaders(),
+      errorMessage: 'Failed to delete sale',
     });
-    if (!response.ok) throw new Error('Failed to delete sale');
   },
 
   getStatistics: async (jours = 30) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/statistiques/?jours=${jours}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch statistics');
-    return response.json();
+    return apiRequest(`/ventes/statistiques/?jours=${jours}`, { errorMessage: 'Failed to fetch statistics' });
   },
 
   valider: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/${id}/valider/`, {
+    return apiRequest(`/ventes/${id}/valider/`, {
       method: 'POST',
-      headers: getHeaders(),
+      errorMessage: 'Failed to validate sale',
     });
-    if (!response.ok) throw new Error('Failed to validate sale');
-    return response.json();
-  },
-
-  livrer: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/${id}/livrer/`, {
-      method: 'POST',
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to deliver sale');
-    return response.json();
   },
 
   annuler: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/ventes/${id}/annuler/`, {
+    return apiRequest(`/ventes/${id}/annuler/`, {
       method: 'POST',
-      headers: getHeaders(),
+      errorMessage: 'Failed to cancel sale',
     });
-    if (!response.ok) throw new Error('Failed to cancel sale');
-    return response.json();
+  },
+
+  downloadFacture: async (id) => {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/ventes/${id}/facture/`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) throw new Error('Impossible de charger la facture');
+    return response.text();
   },
 };
 
 export const categorieService = {
   getAll: async (page = 1, search = '') => {
     const params = new URLSearchParams({ page, search });
-    const response = await fetch(`${API_BASE_URL}/categories/?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch categories');
-    return response.json();
+    return apiRequest(`/categories/?${params}`, { errorMessage: 'Failed to fetch categories' });
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/categories/${id}/`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch category');
-    return response.json();
+    return apiRequest(`/categories/${id}/`, { errorMessage: 'Failed to fetch category' });
   },
 
   create: async (data) => {
-    const response = await fetch(`${API_BASE_URL}/categories/`, {
+    return apiRequest('/categories/', {
       method: 'POST',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to create category',
     });
-    if (!response.ok) throw new Error('Failed to create category');
-    return response.json();
   },
 
   update: async (id, data) => {
-    const response = await fetch(`${API_BASE_URL}/categories/${id}/`, {
+    return apiRequest(`/categories/${id}/`, {
       method: 'PUT',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to update category',
     });
-    if (!response.ok) throw new Error('Failed to update category');
-    return response.json();
   },
 
   delete: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/categories/${id}/`, {
+    return apiRequest(`/categories/${id}/`, {
       method: 'DELETE',
-      headers: getHeaders(),
+      errorMessage: 'Failed to delete category',
     });
-    if (!response.ok) throw new Error('Failed to delete category');
   },
 };
 
 export const fournisseurService = {
   getAll: async (page = 1, search = '') => {
     const params = new URLSearchParams({ page, search });
-    const response = await fetch(`${API_BASE_URL}/fournisseurs/?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch suppliers');
-    return response.json();
+    return apiRequest(`/fournisseurs/?${params}`, { errorMessage: 'Failed to fetch suppliers' });
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/fournisseurs/${id}/`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch supplier');
-    return response.json();
+    return apiRequest(`/fournisseurs/${id}/`, { errorMessage: 'Failed to fetch supplier' });
   },
 
   create: async (data) => {
-    const response = await fetch(`${API_BASE_URL}/fournisseurs/`, {
+    return apiRequest('/fournisseurs/', {
       method: 'POST',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to create supplier',
     });
-    if (!response.ok) throw new Error('Failed to create supplier');
-    return response.json();
   },
 
   update: async (id, data) => {
-    const response = await fetch(`${API_BASE_URL}/fournisseurs/${id}/`, {
+    return apiRequest(`/fournisseurs/${id}/`, {
       method: 'PUT',
-      headers: getHeaders(),
       body: JSON.stringify(data),
+      errorMessage: 'Failed to update supplier',
     });
-    if (!response.ok) throw new Error('Failed to update supplier');
-    return response.json();
   },
 
   delete: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/fournisseurs/${id}/`, {
+    return apiRequest(`/fournisseurs/${id}/`, {
       method: 'DELETE',
-      headers: getHeaders(),
+      errorMessage: 'Failed to delete supplier',
     });
-    if (!response.ok) throw new Error('Failed to delete supplier');
   },
 };
 
 export const produitService = {
-  getAll: async (page = 1, search = '') => {
+  getAll: async (page = 1, search = '', barcode = '') => {
     const params = new URLSearchParams({ page, search });
-    const response = await fetch(`${API_BASE_URL}/produits/?${params}`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch products');
-    return response.json();
+    if (barcode) params.append('barcode', barcode);
+    return apiRequest(`/produits/?${params}`, { errorMessage: 'Failed to fetch products' });
   },
 
   getById: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/produits/${id}/`, {
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to fetch product');
-    return response.json();
+    return apiRequest(`/produits/${id}/`, { errorMessage: 'Failed to fetch product' });
   },
 
   create: async (data) => {
-    const headers = getHeaders();
     const isFormData = data instanceof FormData;
-    if (isFormData) {
-      delete headers['Content-Type'];
-    }
-    const response = await fetch(`${API_BASE_URL}/produits/`, {
+    return apiRequest('/produits/', {
       method: 'POST',
-      headers: isFormData ? { Authorization: headers.Authorization } : headers,
       body: isFormData ? data : JSON.stringify(data),
+      errorMessage: 'Failed to create product',
     });
-    if (!response.ok) throw new Error('Failed to create product');
-    return response.json();
   },
 
   update: async (id, data) => {
-    const headers = getHeaders();
     const isFormData = data instanceof FormData;
-    if (isFormData) {
-      delete headers['Content-Type'];
-    }
-    const response = await fetch(`${API_BASE_URL}/produits/${id}/`, {
+    return apiRequest(`/produits/${id}/`, {
       method: 'PUT',
-      headers: isFormData ? { Authorization: headers.Authorization } : headers,
       body: isFormData ? data : JSON.stringify(data),
+      errorMessage: 'Failed to update product',
     });
-    if (!response.ok) throw new Error('Failed to update product');
-    return response.json();
   },
 
   delete: async (id) => {
-    const response = await fetch(`${API_BASE_URL}/produits/${id}/`, {
+    return apiRequest(`/produits/${id}/`, {
       method: 'DELETE',
-      headers: getHeaders(),
+      errorMessage: 'Failed to delete product',
     });
-    if (!response.ok) throw new Error('Failed to delete product');
+  },
+};
+
+export const achatService = {
+  getAll: async (page = 1, search = '', statut = '') => {
+    const params = new URLSearchParams({ page, search });
+    if (statut) params.append('statut', statut);
+    return apiRequest(`/achats/?${params}`, { errorMessage: 'Failed to fetch purchases' });
+  },
+
+  getById: async (id) => {
+    return apiRequest(`/achats/${id}/`, { errorMessage: 'Failed to fetch purchase' });
+  },
+
+  create: async (data) => {
+    return apiRequest('/achats/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      errorMessage: 'Failed to create purchase',
+    });
+  },
+
+  update: async (id, data) => {
+    return apiRequest(`/achats/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+      errorMessage: 'Failed to update purchase',
+    });
+  },
+
+  delete: async (id) => {
+    return apiRequest(`/achats/${id}/`, {
+      method: 'DELETE',
+      errorMessage: 'Failed to delete purchase',
+    });
+  },
+
+  ajouterItem: async (id, item) => {
+    return apiRequest(`/achats/${id}/ajouter_item/`, {
+      method: 'POST',
+      body: JSON.stringify(item),
+      errorMessage: 'Failed to add item',
+    });
+  },
+
+  supprimerItem: async (id, itemId) => {
+    return apiRequest(`/achats/${id}/supprimer_item/`, {
+      method: 'DELETE',
+      body: JSON.stringify({ item_id: itemId }),
+      errorMessage: 'Failed to delete item',
+    });
+  },
+
+  confirmer: async (id) => {
+    return apiRequest(`/achats/${id}/confirmer/`, {
+      method: 'POST',
+      errorMessage: 'Failed to confirm purchase',
+    });
+  },
+
+  recevoir: async (id) => {
+    return apiRequest(`/achats/${id}/recevoir/`, {
+      method: 'POST',
+      errorMessage: 'Failed to receive purchase',
+    });
+  },
+
+  getStatistics: async () => {
+    return apiRequest('/achats/statistiques/', { errorMessage: 'Failed to fetch statistics' });
   },
 };

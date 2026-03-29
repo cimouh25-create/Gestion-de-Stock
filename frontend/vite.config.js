@@ -1,14 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 
 // https://vite.dev/config/
 export default defineConfig({
   server: {
-    // Allows accessing the dev server from other devices on the same network.
-    // Use your machine's local IP (e.g. 192.168.x.x) in a browser to connect.
-    host: '0.0.0.0',
+    host: true,
+    port: 5173,
+    strictPort: true,
+    https: true,           // ✅ Re-enable HTTPS for mobile camera access
+    allowedHosts: 'all'    // 🔥 autorise tous les tunnels
   },
   plugins: [
+    basicSsl(),            // ✅ Generates a temporary certificate
     react({
       babel: {
         plugins: [['babel-plugin-react-compiler']],
