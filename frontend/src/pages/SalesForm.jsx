@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { venteService, clientService, produitService } from '../services/api';
 
@@ -23,8 +23,11 @@ export function SalesForm() {
     type_remise: 'détails',
   });
   const [productSearch, setProductSearch] = useState('');
+  const [barcodeSearch, setBarcodeSearch] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -99,6 +102,9 @@ export function SalesForm() {
     }
   };
 
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
   const selectProduct = (product) => {
     setNewItem({
       ...newItem,
@@ -109,6 +115,118 @@ export function SalesForm() {
     setProductSearch(`${product.nom} (${product.reference})`);
     setShowSuggestions(false);
   };
+
+  const handleBarcodeScan = async () => {
+    if (!barcodeSearch.trim()) {
+      setError('Veuillez entrer un code-barres à scanner');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await produitService.getAll(1, '', barcodeSearch.trim());
+      const results = data.results || data;
+      if (!results.length) {
+        setError('Produit introuvable pour ce code-barres');
+      } else {
+        selectProduct(results[0]);
+        setBarcodeSearch('');
+      }
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la recherche du code-barres');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startCameraScan = async () => {
+    setCameraError(null);
+
+    if (!('mediaDevices' in navigator) || !('getUserMedia' in navigator.mediaDevices)) {
+      setCameraError('Caméra non supportée par ce navigateur. Utilisez la saisie manuelle ou un autre navigateur.');
+      return;
+    }
+
+    if (typeof window.BarcodeDetector === 'undefined') {
+      setCameraError('BarcodeDetector non supporté par ce navigateur. Saisissez le code-barres manuellement.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setScanning(true);
+    } catch (err) {
+      setCameraError('Impossible d\'accéder à la caméra. Vérifiez les permissions et le HTTPS.');
+    }
+  };
+
+  const stopCameraScan = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setScanning(false);
+  };
+
+  useEffect(() => {
+    if (!scanning) return;
+
+    let detector;
+    let raf;
+    const runDetection = async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        raf = requestAnimationFrame(runDetection);
+        return;
+      }
+
+      const detectorSupported = typeof window.BarcodeDetector !== 'undefined';
+      if (!detectorSupported) {
+        setCameraError('BarcodeDetector non supporté par ce navigateur');
+        stopCameraScan();
+        return;
+      }
+
+      if (!detector) {
+        const supportedFormats = await window.BarcodeDetector.getSupportedFormats();
+        detector = new window.BarcodeDetector({ formats: supportedFormats });
+      }
+
+      try {
+        const barcodes = await detector.detect(videoRef.current);
+        if (barcodes.length) {
+          const code = barcodes[0].rawValue;
+          setBarcodeSearch(code);
+          stopCameraScan();
+          setTimeout(handleBarcodeScan, 200);
+          return;
+        }
+      } catch (err) {
+        setCameraError('Erreur de détection barcode');
+        stopCameraScan();
+        return;
+      }
+
+      raf = requestAnimationFrame(runDetection);
+    };
+
+    raf = requestAnimationFrame(runDetection);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [scanning]);
+
+  useEffect(() => {
+    return () => {
+      stopCameraScan();
+    };
+  }, []);
+
 
   const handleAddItem = () => {
     if (!newItem.produit_id || !newItem.produit) {
@@ -342,6 +460,53 @@ export function SalesForm() {
 
             {/* Search & Add Item */}
             <div className="space-y-4 mb-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={barcodeSearch}
+                    onChange={(e) => setBarcodeSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleBarcodeScan(); } }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+                    placeholder="Scanner/Rentrer le code-barres puis Enter"
+                  />
+                </div>
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={handleBarcodeScan}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    🔍 Rechercher code-barres
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                <button
+                  type="button"
+                  onClick={() => scanning ? stopCameraScan() : startCameraScan()}
+                  className={`px-4 py-2 ${scanning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'} text-white rounded-lg transition`}
+                >
+                  {scanning ? '🛑 Arrêter la lecture' : '📷 Scanner avec la caméra'}
+                </button>
+                {cameraError && (
+                  <p className="text-sm text-red-600">{cameraError}</p>
+                )}
+              </div>
+
+              {scanning && (
+                <div className="mt-3">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-60 object-cover rounded-lg border border-gray-300"
+                    muted
+                    playsInline
+                  />
+                  <p className="mt-2 text-xs text-gray-500">Dirigez le code-barres vers la caméra. Une fois détecté, le produit sera sélectionné automatiquement.</p>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 relative">
                   <input

@@ -158,6 +158,7 @@ export function ProductList() {
                   <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell">Image</th>
                   <th className="px-4 py-3 text-left font-semibold">Nom</th>
                   <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell">Référence</th>
+                  <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell">Barcode</th>
                   <th className="px-4 py-3 text-center font-semibold text-sm">Prix Achat</th>
                   <th className="px-4 py-3 text-center font-semibold text-sm">Prix Vente</th>
                   <th className="px-4 py-3 text-center font-semibold">Stock</th>
@@ -194,6 +195,7 @@ export function ProductList() {
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900 text-sm">{product.nom}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm font-mono hidden lg:table-cell">{product.reference}</td>
+                      <td className="px-4 py-3 text-gray-600 text-sm font-mono hidden lg:table-cell">{product.barcode || '—'}</td>
                       <td className="px-4 py-3 text-gray-700 text-sm text-center">{parseFloat(product.prix_achat).toFixed(2)} DA</td>
                       <td className="px-4 py-3 font-bold text-green-600 text-sm text-center">{parseFloat(product.prix_vente).toFixed(2)} DA</td>
                       <td className="px-4 py-3 text-center">

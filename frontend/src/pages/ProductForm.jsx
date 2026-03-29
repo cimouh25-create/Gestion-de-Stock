@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { produitService, categorieService, fournisseurService } from '../services/api';
+import Quagga from '@ericblade/quagga2';
 
 export function ProductForm() {
   const { id } = useParams();
@@ -10,6 +11,7 @@ export function ProductForm() {
   const [formData, setFormData] = useState({
     nom: '',
     reference: '',
+    barcode: '',
     description: '',
     categorie: '',
     fournisseur: '',
@@ -24,6 +26,10 @@ export function ProductForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
     loadOptions();
@@ -75,6 +81,75 @@ export function ProductForm() {
     }
   };
 
+  const startCameraScan = () => {
+    setCameraError(null);
+
+    if (!videoRef.current) {
+      setCameraError("Caméra non disponible");
+      return;
+    }
+
+    setScanning(true);
+
+    Quagga.init({
+      inputStream: {
+        type: "LiveStream",
+        target: videoRef.current,
+        constraints: {
+          facingMode: "environment", // caméra arrière
+        },
+      },
+      decoder: {
+        readers: [
+          "ean_reader",
+          "ean_8_reader",
+          "code_128_reader",
+          "code_39_reader",
+          "upc_reader",
+        ],
+      },
+      locate: true,
+    }, (err) => {
+      if (err) {
+        console.error(err);
+        setCameraError("Erreur initialisation caméra");
+        setScanning(false);
+        return;
+      }
+      Quagga.start();
+    });
+
+    Quagga.onDetected((result) => {
+      const code = result.codeResult.code;
+
+      setFormData((prev) => ({
+        ...prev,
+        barcode: code,
+      }));
+
+      // 🔊 vibration mobile (optionnel)
+      if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+
+      stopCameraScan();
+    });
+  };
+
+  const stopCameraScan = () => {
+    try {
+      Quagga.stop();
+      Quagga.offDetected();
+    } catch (e) {}
+    setScanning(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCameraScan();
+    };
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nom || !formData.reference) {
@@ -87,6 +162,7 @@ export function ProductForm() {
       const submitData = new FormData();
       submitData.append('nom', formData.nom);
       submitData.append('reference', formData.reference);
+      submitData.append('barcode', formData.barcode || '');
       submitData.append('description', formData.description);
       submitData.append('categorie', formData.categorie || '');
       submitData.append('fournisseur', formData.fournisseur || '');
@@ -192,8 +268,8 @@ export function ProductForm() {
               </div>
             </div>
 
-            {/* Nom & Référence */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Nom, Référence et Barcode */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Nom du produit *</label>
                 <input
@@ -218,6 +294,39 @@ export function ProductForm() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Barcode</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    name="barcode"
+                    value={formData.barcode}
+                    onChange={handleChange}
+                    placeholder="Ex: 1234567890123"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => scanning ? stopCameraScan() : startCameraScan()}
+                    className={`px-3 py-2 text-xs font-semibold rounded-lg text-white ${scanning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}`}
+                  >
+                    {scanning ? '🛑 Arrêter' : '📷 Scanner'}
+                  </button>
+                </div>
+                {cameraError && <p className="text-xs text-red-600 mt-1">{cameraError}</p>}
+                {scanning && (
+                  <div className="mt-2">
+                    <video
+                      ref={videoRef}
+                      className="w-full h-40 object-cover rounded-lg border border-gray-300"
+                      muted
+                      playsInline
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Pointez un code-barres vers la caméra pour remplir automatiquement.</p>
+                  </div>
+                )}
               </div>
             </div>
 

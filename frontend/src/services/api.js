@@ -237,8 +237,9 @@ export const fournisseurService = {
 };
 
 export const produitService = {
-  getAll: async (page = 1, search = '') => {
+  getAll: async (page = 1, search = '', barcode = '') => {
     const params = new URLSearchParams({ page, search });
+    if (barcode) params.append('barcode', barcode);
     return apiRequest(`/produits/?${params}`, { errorMessage: 'Failed to fetch products' });
   },
 

@@ -30,7 +30,7 @@ class FournisseurViewSet(viewsets.ModelViewSet):
 
 class ProduitViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['nom', 'reference', 'categorie__nom']
+    search_fields = ['nom', 'reference', 'barcode', 'categorie__nom']
     ordering_fields = ['nom', 'quantite_en_stock', 'prix_vente', 'created_at']
     ordering = ['nom']
 
@@ -48,6 +48,11 @@ class ProduitViewSet(viewsets.ModelViewSet):
         stock_critique = self.request.query_params.get('stock_critique')
         if stock_critique == 'true':
             qs = qs.filter(quantite_en_stock__lte=F('seuil_alerte'))
+
+        barcode = self.request.query_params.get('barcode')
+        if barcode:
+            qs = qs.filter(barcode=barcode)
+
         return qs
 
     def get_serializer_class(self):

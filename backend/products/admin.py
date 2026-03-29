@@ -14,11 +14,11 @@ class FournisseurAdmin(admin.ModelAdmin):
 @admin.register(Produit)
 class ProduitAdmin(admin.ModelAdmin):
     list_display = [
-        'reference', 'nom', 'categorie',
+        'reference', 'barcode', 'nom', 'categorie',
         'quantite_en_stock', 'seuil_alerte',
         'prix_vente', 'est_actif'
     ]
     list_filter = ['categorie', 'est_actif', 'fournisseur']
-    search_fields = ['nom', 'reference']
+    search_fields = ['nom', 'reference', 'barcode']
     list_editable = ['quantite_en_stock', 'est_actif']
     readonly_fields = ['created_at', 'updated_at']

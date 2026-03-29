@@ -27,6 +27,7 @@ class Fournisseur(models.Model):
 class Produit(models.Model):
     nom = models.CharField(max_length=200)
     reference = models.CharField(max_length=50, unique=True)
+    barcode = models.CharField(max_length=128, unique=True, blank=True, null=True)
     description = models.TextField(blank=True)
     categorie = models.ForeignKey(
         Categorie, on_delete=models.SET_NULL,
