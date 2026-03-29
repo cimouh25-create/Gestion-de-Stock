@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { produitService, categorieService, fournisseurService } from '../services/api';
-import Quagga from '@ericblade/quagga2';
 
 export function ProductForm() {
   const { id } = useParams();
@@ -81,74 +80,105 @@ export function ProductForm() {
     }
   };
 
-  const startCameraScan = () => {
+  const startCameraScan = async () => {
     setCameraError(null);
 
-    if (!videoRef.current) {
-      setCameraError("Caméra non disponible");
+    if (!('mediaDevices' in navigator) || !('getUserMedia' in navigator.mediaDevices)) {
+      setCameraError('Caméra non supportée');
       return;
     }
 
-    setScanning(true);
+    if (typeof window.BarcodeDetector === 'undefined') {
+      setCameraError('BarcodeDetector non supporté (utilise Chrome)');
+      return;
+    }
 
-    Quagga.init({
-      inputStream: {
-        type: "LiveStream",
-        target: videoRef.current,
-        constraints: {
-          facingMode: "environment", // caméra arrière
-        },
-      },
-      decoder: {
-        readers: [
-          "ean_reader",
-          "ean_8_reader",
-          "code_128_reader",
-          "code_39_reader",
-          "upc_reader",
-        ],
-      },
-      locate: true,
-    }, (err) => {
-      if (err) {
-        console.error(err);
-        setCameraError("Erreur initialisation caméra");
-        setScanning(false);
-        return;
-      }
-      Quagga.start();
-    });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
 
-    Quagga.onDetected((result) => {
-      const code = result.codeResult.code;
+      streamRef.current = stream;
+      setScanning(true);
 
-      setFormData((prev) => ({
-        ...prev,
-        barcode: code,
-      }));
-
-      // 🔊 vibration mobile (optionnel)
-      if (navigator.vibrate) {
-        navigator.vibrate(200);
-      }
-
-      stopCameraScan();
-    });
+    } catch (err) {
+      console.error(err);
+      setCameraError('Impossible d’accéder à la caméra');
+    }
   };
 
   const stopCameraScan = () => {
-    try {
-      Quagga.stop();
-      Quagga.offDetected();
-    } catch (e) {}
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
     setScanning(false);
   };
 
   useEffect(() => {
-    return () => {
-      stopCameraScan();
+    if (!scanning || !streamRef.current || !videoRef.current) return;
+
+    const video = videoRef.current;
+    video.srcObject = streamRef.current;
+    video.play();
+  }, [scanning]);
+
+  useEffect(() => {
+    if (!scanning) return;
+
+    let detector;
+    let raf;
+
+    const detect = async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) {
+        raf = requestAnimationFrame(detect);
+        return;
+      }
+
+      try {
+        if (!detector) {
+          const formats = await window.BarcodeDetector.getSupportedFormats();
+          detector = new window.BarcodeDetector({ formats });
+        }
+
+        const barcodes = await detector.detect(videoRef.current);
+
+        if (barcodes.length > 0) {
+          const code = barcodes[0].rawValue;
+
+          setFormData(prev => ({
+            ...prev,
+            barcode: code,
+          }));
+
+          // vibration mobile
+          if (navigator.vibrate) navigator.vibrate(200);
+
+          stopCameraScan();
+          return;
+        }
+
+      } catch (err) {
+        console.error(err);
+        setCameraError('Erreur détection');
+        stopCameraScan();
+        return;
+      }
+
+      raf = requestAnimationFrame(detect);
     };
-  }, []);
+
+    raf = requestAnimationFrame(detect);
+
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [scanning]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -317,14 +347,22 @@ export function ProductForm() {
                 </div>
                 {cameraError && <p className="text-xs text-red-600 mt-1">{cameraError}</p>}
                 {scanning && (
-                  <div className="mt-2">
+                  <div className="mt-2 relative">
                     <video
                       ref={videoRef}
                       className="w-full h-40 object-cover rounded-lg border border-gray-300"
                       muted
                       playsInline
                     />
-                    <p className="text-xs text-gray-500 mt-1">Pointez un code-barres vers la caméra pour remplir automatiquement.</p>
+
+                    {/* 🎯 Cadre scanner */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-64 h-20 border-2 border-dashed border-red-500 rounded-md"></div>
+                    </div>
+
+                    <p className="text-xs text-gray-500 mt-1">
+                      Pointez un code-barres vers la caméra pour remplir automatiquement.
+                    </p>
                   </div>
                 )}
               </div>

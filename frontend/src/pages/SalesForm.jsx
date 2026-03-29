@@ -103,7 +103,7 @@ export function SalesForm() {
   };
 
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
+  const [cameraStream, setCameraStream] = useState(null);
 
   const selectProduct = (product) => {
     setNewItem({
@@ -153,26 +153,53 @@ export function SalesForm() {
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+    const openCamera = async (constraints) => {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      setCameraStream(stream);
       setScanning(true);
+    };
+
+    try {
+      await openCamera({ video: { facingMode: 'environment' } });
     } catch (err) {
-      setCameraError('Impossible d\'accéder à la caméra. Vérifiez les permissions et le HTTPS.');
+      console.warn('Échec caméra arrière, tentative caméra frontale :', err);
+      try {
+        await openCamera({ video: true });
+      } catch (err2) {
+        console.error('Impossible d\'accéder à la caméra', err2);
+        const baseMessage = 'Impossible d\'accéder à la caméra. Vérifiez les permissions, le HTTPS et que l\'appareil dispose d\'une caméra.';
+        setCameraError(`${baseMessage} (${err2.name || ''}: ${err2.message || ''})`);
+        setScanning(false);
+      }
     }
   };
 
   const stopCameraScan = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setScanning(false);
   };
+
+  useEffect(() => {
+    if (!scanning || !cameraStream || !videoRef.current) return;
+
+    const video = videoRef.current;
+    video.srcObject = cameraStream;
+    video.muted = true;
+    video.playsInline = true;
+
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch((playErr) => {
+        console.warn('Impossible de démarrer la lecture vidéo automatiquement', playErr);
+      });
+    }
+  }, [scanning, cameraStream]);
 
   useEffect(() => {
     if (!scanning) return;
@@ -502,6 +529,7 @@ export function SalesForm() {
                     className="w-full h-60 object-cover rounded-lg border border-gray-300"
                     muted
                     playsInline
+                    autoPlay
                   />
                   <p className="mt-2 text-xs text-gray-500">Dirigez le code-barres vers la caméra. Une fois détecté, le produit sera sélectionné automatiquement.</p>
                 </div>
